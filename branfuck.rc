@@ -1,0 +1,151 @@
+#!/bin/rc
+
+# A minified version of brainfuck implemented in rc(1).
+# It has no i/o, so it takes input from the `input` variable.
+# The state of the stack is saved to `output`, for debugging purposes.
+# Branfuck only implements <>+-[].
+
+# puts $1 elements into $2.
+fn buf {
+    gg = ()
+    while(! ~ $#gg $1) gg = ($gg g)
+    # While the length of gg is not $1, add one g to gg.
+    $2 = $gg
+}
+
+fn pop {
+    # Pop one element off the top of $1.
+    save = $1
+    eval tmp '=' '$'^$1
+    # Set tmp to be the contents of the name of the variable stored in $1.
+    '*' = $tmp
+    shift 1
+    # Set $* to be $tmp, pop one element off the top.
+    $save = $*
+}
+
+fn insert {
+    elem = $1
+    count = (g)
+    tmp2 = ()
+    for (j in $tape) {
+        if (~ $#count $pointer) tmp2 = ($tmp2 $elem)
+        if not tmp2 = ($tmp2 $j)
+        count = ($count g)
+    }
+    # Iterate through all elements in the tape.
+    # If the counter is not equal to the pointer,
+    # append the jth element of the tape to a temporary copy.
+    # If the counter is equal to the pointer, append $1 rather than the jth element.
+    tape = $tmp2 tmp2 = ()
+    # Set the contents of the tape to be the temporary buffer, and unset the temporary buffer.
+}
+
+fn plus {
+    # Increments the value of the tape at the pointer by one.
+    buf $tape($pointer) h
+    h = ($h g)
+    # Create a buffer in h, and increase it's length by one.
+    insert $#h
+}
+
+fn minus {
+    buf $tape($pointer) h
+    '*' = $h
+    # Create a buffer in h, and set $* to it.
+    shift 1
+    # Knock one element off.
+    insert $#*
+    # Insert the length of the buffer into the tape.
+}
+
+fn increment {
+    # Increments the value of the pointer by one.
+    buf $pointer h
+    h = ($h g)
+    # Create a buffer in h of length of the pointer, and expand it by one.
+    pointer = $#h
+    if (~ $tape($pointer) ()) tape = ($tape 0)
+    # Expand the tape by one if the pointer points at nothing.
+}
+
+fn decrement {
+    # The tape is 1-indexed. Don't let us go below 1.
+    # branfuck doesn't carry the typical behaviour of overflowing, or exiting.
+    if (~ $pointer 1) continue
+    if not { 
+        buf $pointer h
+        '*' = $h
+        shift 1
+        # Create a buffer of length $pointer, set $* to it, and knock one off.
+        pointer = $#*
+    }
+}
+
+fn left_bracket {
+    if (~ $tape($pointer) 0) {
+        while (! ~ $input($#i) ']') {
+            i = ($i g)
+        }
+        i = ($i g) 
+        # If we see a [, we check the tape to see if the current cell is 0.
+        # If it is, we skip(increment the pointer) until we see a ].
+        # Once we do, we increment the instruction pointer one more time.
+        # This means we've moved once past the ], as per the spec.
+    }
+    if not {
+        buf $#i tmp
+        left_locs = ($#tmp $left_locs)
+        tmp = ()
+        # If it's not 0, we create a buffer of length of the pointer, 
+        # and store the location of the instruction after the [ in left_locs.
+        # left_locs is used by ].
+    }
+}
+
+fn right_bracket {
+    if (~ $tape($pointer) 0) {
+        pop left_locs
+        # Remove a single element from the start of left locs.
+    }
+    if not {
+        while (! ~ $#i $left_locs(1)) pop i
+        # While the instruction pointer does not equal the last [, 
+        # decrement the instruction pointer.
+    }
+}
+
+fn main {
+    pointer = 1
+    tape = (0)
+    i = (g)
+    left_locs = ()
+    # Initialise the pointer to one, the tape to zero,
+    # the instruction pointer to a length of one,
+    # and the left instruction locations to null.
+    
+    while (! ~ $input($#i) ()) {
+        # This loop checks to see if input isn't empty.
+        # i is a buffer that we create manually.
+        # $#i is the instruction pointer.
+        switch ($input($#i)) {
+        case '+'
+            plus
+        case '-'
+            minus
+        case '>'
+            increment
+        case '<'
+            decrement
+        case '['
+            left_bracket
+        case ']'
+          right_bracket
+        }
+    i = ($i g)
+    }
+    ~ $1 -d && echo tape: $tape
+    # This is technically cheating.
+}
+
+main $*
